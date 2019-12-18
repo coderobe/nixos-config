@@ -5,11 +5,14 @@
 { config, pkgs, ... }:
 
 let
-  secrets = import ./secrets.nix;
+  secrets = import ./load-secrets.nix;
 in {
   imports =
-    [ # Include the results of the hardware scan.
-      ./hardware-configuration.nix
+    [
+      ./bluetooth.nix
+      ./intel.nix
+      ./xserver.nix
+      ./zeroconf.nix
     ];
 
   nix.gc = {
@@ -26,17 +29,10 @@ in {
       efi.canTouchEfiVariables = true;
     };
     kernelPackages = pkgs.linuxPackages_latest;
-    kernelModules = [ "hid-microsoft" ];
   };
 
   networking = {
-    hostName = "eridian";
     networkmanager.enable = true;
-    # The global useDHCP flag is deprecated, therefore explicitly set to false here.
-    # Per-interface useDHCP will be mandatory in the future, so this generated config
-    # replicates the default behaviour.
-    useDHCP = false;
-    interfaces.wlp1s0.useDHCP = true;
   };
 
   powerManagement = { 
@@ -45,7 +41,6 @@ in {
   };
 
   environment = {
-    etc."NetworkManager/system-connections".source = "/persist/etc/NetworkManager/system-connections/";
     # List packages installed in system profile. To search, run:
     # $ nix search wget
     systemPackages = with pkgs;
@@ -64,18 +59,16 @@ in {
       buildFlagsArray = [ "-ldflags='-X main.Build=${version}'" ];
     };
     in [
-      btrfs-progs
+      (if config.services.xserver.enable then chromium)
+      (if config.services.xserver.enable then thunderbird)
       curl
       nano
       htop
       acpi
-      chromium
-      xournalpp
-      gnome3.defaultIconTheme # Required for xournalpp
+      ncdu
       openssh
       tmux
       mosh
-      steam
       nebula
       ethtool
       iw
@@ -88,7 +81,6 @@ in {
 
   # Select internationalisation properties.
   i18n = {
-    consoleFont = "latarcyrheb-sun32";
     consoleKeyMap = "de-latin1";
     defaultLocale = "en_US.UTF-8";
   };
@@ -125,42 +117,21 @@ in {
     steam-hardware.enable = true;
     # Scanning
     sane.enable = true;
-    # Bluetooth
-    bluetooth = {
-      enable = true;
-      package = pkgs.bluezFull;
-      powerOnBoot = false;
-    };
-    # ucode
-    cpu.intel.updateMicrocode = true;
   };
 
   services = {
-    # Zeroconf
-    avahi = {
-      enable = true;
-    };
-    # Enable the X11 windowing system.
-    xserver = {
-      enable = true;
-      layout = "de";
-      # Enable touchpad support.
-      libinput.enable = true;
-      # Enable a Desktop Environment.
-      desktopManager.plasma5.enable = true;
-    };
     # Enable CUPS to print documents.
     printing.enable = true;
   };
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
   users.users = {
-    root.initialHashedPassword = secrets.password_hash;
+    root.initialHashedPassword = secrets.hashedPw;
     coderobe = {
       uid = 1000;
       isNormalUser = true;
       extraGroups = [ "wheel" "networkmanager" ];
-      initialHashedPassword = secrets.password_hash;
+      initialHashedPassword = secrets.hashedPw;
     };
   };
 
